@@ -692,6 +692,12 @@ func createRandomRootPassword() (string, error) {
 
 // changeInstanceType resizes the Linode Instance
 func changeInstanceType(client *linodego.Client, instance *linodego.Instance, targetType string, d *schema.ResourceData) error {
+
+	resizeOpts := linodego.InstanceResizeOptions{
+		AllowAutoDiskResize: false,
+		Type:                targetType,
+	}
+
 	// Instance must be either offline or running (with no extra activity) to resize.
 	if instance.Status == linodego.InstanceOffline || instance.Status == linodego.InstanceShuttingDown {
 		if _, err := client.WaitForInstanceStatus(context.Background(), instance.ID, linodego.InstanceOffline, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
@@ -703,13 +709,14 @@ func changeInstanceType(client *linodego.Client, instance *linodego.Instance, ta
 		}
 	}
 
-	if err := client.ResizeInstance(context.Background(), instance.ID, targetType); err != nil {
+	// Issue the resize job
+	if err := client.ResizeInstance(context.Background(), instance.ID, resizeOpts); err != nil {
 		return fmt.Errorf("Error resizing instance %d: %s", instance.ID, err)
 	}
 
-	_, err := client.WaitForEventFinished(context.Background(), instance.ID, linodego.EntityLinode, linodego.ActionLinodeResize, *instance.Created, int(d.Timeout(schema.TimeoutUpdate).Seconds()))
-	if err != nil {
-		return fmt.Errorf("Error waiting for instance %d to finish resizing: %s", instance.ID, err)
+	// wait for instance to begin resizing after issuing resize job
+	if _, err := client.WaitForInstanceStatus(context.Background(), instance.ID, linodego.InstanceResizing, int(d.Timeout(schema.TimeoutUpdate).Seconds())); err != nil {
+		return fmt.Errorf("Error waiting for instance %d to enter resizing state: %s", instance.ID, err)
 	}
 
 	return nil
