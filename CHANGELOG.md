@@ -1,4 +1,24 @@
-## 1.6.1 (Unreleased)
+## 1.9.0 (Unreleased)
+## 1.8.0 (July 16, 2019)
+
+BACKWARDS INCOMPATIBILITIES / NOTES:
+
+* resource/linode\_instance: `config.root_device` no longer supplies `/dev/root` when no `/dev/sda` device is present (this was an API work-around that is no longer needed) ([#10](https://github.com/terraform-providers/terraform-provider-linode/issues/10), [#18](https://github.com/terraform-providers/terraform-provider-linode/issues/18))
+
+## 1.7.0 (July 08, 2019)
+
+ENHANCEMENTS:
+
+* Compatible with Terraform v0.12.0+
+* Uses linodego v0.10.0
+* Examples updated with new TF config syntax
+
+BUG FIXES:
+
+* The Linode API resizes disks by default when an instance is resized. This behavior is now accounted for -- Terraform will not resize disks unless a new size is specified in the config.
+* The provider now waits for instance resizing to complete before attempting to issue disk resize jobs against an instance. This was required because new jobs issued to actively-resizing instances fail.
+* Disk resizing and instance resizing are now executed in the correct order.
+
 ## 1.6.0 (April 10, 2019)
 
 FEATURES:

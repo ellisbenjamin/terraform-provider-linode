@@ -529,7 +529,7 @@ func TestAccLinodeInstance_configUpdate(t *testing.T) {
 					resource.TestCheckResourceAttr(resName, "label", instanceName),
 					resource.TestCheckResourceAttr(resName, "group", "tf_test"),
 					resource.TestCheckResourceAttr(resName, "config.0.kernel", "linode/latest-64bit"),
-					resource.TestCheckResourceAttr(resName, "config.0.root_device", "/dev/root"),
+					resource.TestCheckResourceAttr(resName, "config.0.root_device", "/dev/sda"),
 					resource.TestCheckResourceAttr(resName, "config.0.helpers.0.network", "true"),
 					resource.TestCheckResourceAttr(resName, "alerts.0.cpu", "60"),
 				),
@@ -543,7 +543,7 @@ func TestAccLinodeInstance_configUpdate(t *testing.T) {
 					// changed kerel, not label
 					resource.TestCheckResourceAttr(resName, "config.0.label", "config"),
 					resource.TestCheckResourceAttr(resName, "config.0.kernel", "linode/latest-32bit"),
-					resource.TestCheckResourceAttr(resName, "config.0.root_device", "/dev/root"),
+					resource.TestCheckResourceAttr(resName, "config.0.root_device", "/dev/sda"),
 					resource.TestCheckResourceAttr(resName, "config.0.helpers.0.network", "false"),
 					resource.TestCheckResourceAttr(resName, "alerts.0.cpu", "80"),
 				),
@@ -868,7 +868,53 @@ func TestAccLinodeInstance_diskResize(t *testing.T) {
 					testAccCheckComputeInstanceDisks(&instance, testDisk("disk", testDiskSize(3000))),
 				),
 			},
-			// Bump it to a 2048, and expand the disk
+			// Increase disk size
+			{
+				Config: testAccCheckLinodeInstanceWithDiskAndConfigResized(instanceName, publicKeyMaterial),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeInstanceExists(resName, &instance),
+					resource.TestCheckResourceAttr(resName, "specs.0.disk", "25600"),
+					resource.TestCheckResourceAttr(resName, "type", "g6-nanode-1"),
+					resource.TestCheckResourceAttr(resName, "swap_size", "0"),
+					resource.TestCheckResourceAttr(resName, "disk.0.size", "6000"),
+					testAccCheckComputeInstanceConfigs(&instance, testConfig("config", testConfigKernel("linode/latest-64bit"))),
+					testAccCheckComputeInstanceDisks(&instance, testDisk("disk", testDiskSize(6000))),
+				),
+			},
+		},
+	})
+}
+
+func TestAccLinodeInstance_diskResizeAndExpanded(t *testing.T) {
+	t.Parallel()
+	var instance linodego.Instance
+	var instanceName = acctest.RandomWithPrefix("tf_test")
+	resName := "linode_instance.foobar"
+	publicKeyMaterial, _, err := acctest.RandSSHKeyPair("linode@ssh-acceptance-test")
+	if err != nil {
+		t.Fatalf("Error generating test SSH key pair: %s", err)
+	}
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckLinodeInstanceDestroy,
+		Steps: []resource.TestStep{
+			// Start off with a Linode 1024
+			{
+				Config: testAccCheckLinodeInstanceWithDiskAndConfig(instanceName, publicKeyMaterial),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckLinodeInstanceExists(resName, &instance),
+					resource.TestCheckResourceAttr(resName, "specs.0.disk", "25600"),
+					resource.TestCheckResourceAttr(resName, "type", "g6-nanode-1"),
+					resource.TestCheckResourceAttr(resName, "swap_size", "0"),
+					resource.TestCheckResourceAttr(resName, "disk.0.size", "3000"),
+					testAccCheckComputeInstanceConfigs(&instance, testConfig("config", testConfigKernel("linode/latest-64bit"))),
+					testAccCheckComputeInstanceDisks(&instance, testDisk("disk", testDiskSize(3000))),
+				),
+			},
+
+			// Bump to 2048 and expand disk
 			{
 				Config: testAccCheckLinodeInstanceWithDiskAndConfigResizedAndExpanded(instanceName, publicKeyMaterial),
 				Check: resource.ComposeTestCheckFunc(
@@ -1335,7 +1381,7 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 		helpers {
 			network = true
 		}
@@ -1355,12 +1401,12 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "configa"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 	config {
 		label = "configb"
 		kernel = "linode/latest-32bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 
 	boot_config_label = "configa"
@@ -1377,12 +1423,12 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "configa"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 	config {
 		label = "configb"
 		kernel = "linode/latest-32bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 
 	boot_config_label = "configa"
@@ -1400,19 +1446,19 @@ resource "linode_instance" "foobar" {
 		label = "configa"
 		comments = "configa"
 		kernel = "linode/latest-32bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 	config {
 		label = "configb"
 		comments = "configb"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 	config {
 		label = "configc"
 		comments = "configc"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 
 	boot_config_label = "configa"
@@ -1543,7 +1589,39 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		devices = { sda = { disk_label = "disk" } }
+		devices {
+			sda {
+				disk_label = "disk"
+			}
+		}
+	}
+}`, instance, pubkey)
+}
+
+func testAccCheckLinodeInstanceWithDiskAndConfigResized(instance string, pubkey string) string {
+	return fmt.Sprintf(`
+resource "linode_instance" "foobar" {
+	label = "%s"
+	type = "g6-nanode-1"
+	region = "us-east"
+	group = "tf_test"
+
+	disk {
+		label = "disk"
+		image = "linode/ubuntu18.04"
+		root_pass = "b4d_p4s5"
+		authorized_keys = ["%s"]
+		size = 6000
+	}
+
+	config {
+		label = "config"
+		kernel = "linode/latest-64bit"
+		devices {
+			sda {
+				disk_label = "disk"
+			}
+		}
 	}
 }`, instance, pubkey)
 }
@@ -1567,7 +1645,11 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		devices = { sda = { disk_label = "disk" } }
+		devices {
+			sda {
+				disk_label = "disk"
+			}
+		}
 	}
 }`, instance, pubkey)
 }
@@ -1599,9 +1681,13 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		devices = {
-			sda = { disk_label = "diskb" }, 
-			sdb = { disk_label = "disk" }
+		devices {
+			sda {
+				disk_label = "diskb"
+			}
+			sdb {
+				disk_label = "disk"
+			}
 		}
 	}
 }`, instance, pubkey, pubkey)
@@ -1632,14 +1718,28 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "configa"
 		kernel = "linode/latest-64bit"
-		devices = { sda = { disk_label = "diska" }, sdb = { disk_label = "diskb" } }
+		devices {
+			sda {
+				disk_label = "diska"
+			}
+			sdb {
+				disk_label = "diskb"
+			}
+		}
 	}
 
 	config {
 		label = "configb"
 		comments = "won't boot"
 		kernel = "linode/grub2"
-		devices = { sda = { disk_label = "diskb" }, sdb = { disk_label = "diska" } }
+		devices {
+			sda {
+				disk_label = "diskb"
+			}
+			sdb {
+				disk_label = "diska"
+			}
+		}
 	}
 
 	boot_config_label = "configa"
@@ -1671,9 +1771,13 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		devices = {
-			sda = { disk_label = "disk" },
-			sdb = { volume_id = "${linode_volume.foo.id}" }
+		devices {
+			sda {
+				disk_label = "disk"
+			}
+			sdb {
+				volume_id = "${linode_volume.foo.id}"
+			}
 		}
 	}
 }`, instance, instance, pubkey)
@@ -1691,7 +1795,7 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-64bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 	}
 
 	boot_config_label = "config"
@@ -1714,7 +1818,7 @@ resource "linode_instance" "foobar" {
 	config {
 		label = "config"
 		kernel = "linode/latest-32bit"
-		root_device = "/dev/root"
+		root_device = "/dev/sda"
 		helpers {
 			network = false
 		}
