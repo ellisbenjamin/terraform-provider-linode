@@ -12,3 +12,5 @@ require (
 	golang.org/x/oauth2 v0.0.0-20190220154721-9b3c75971fc9
 	gopkg.in/resty.v1 v1.11.0 // indirect
 )
+
+replace github.com/linode/linodego => /users/bellis/go/src/github.com/ellisbenjamin/linodego
